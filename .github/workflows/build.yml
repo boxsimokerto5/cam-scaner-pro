@@ -31,12 +31,16 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 3. Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: 3. Setup Gradle (Official Action)
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: 4. Siapkan File Konfigurasi Lingkungan (.env)
+      - name: 4. Accept Android SDK Licenses
+        run: |
+          # Android SDK sudah terpasang secara default di GitHub runner (ubuntu-latest)
+          yes | sdkmanager --licenses 2>/dev/null || true
+
+      - name: 5. Siapkan File Konfigurasi Lingkungan (.env)
         run: |
           if [ ! -f .env ]; then
             if [ -f .env.example ]; then
@@ -48,14 +52,13 @@ jobs:
             fi
           fi
 
-      - name: 5. Buat / Siapkan Keystore Signature Otomatis
+      - name: 6. Buat / Siapkan Keystore Signature Otomatis
         id: setup_keystore
         run: |
-          # Direktori dan nama file keystore
           KEYSTORE_FILE="my-upload-key.jks"
           KEY_ALIAS="upload"
           
-          # Tentukan password (menggunakan secret jika ada, atau default aman)
+          # Tentukan password (menggunakan secret jika ada, atau default)
           STORE_PASS="${{ secrets.STORE_PASSWORD }}"
           if [ -z "$STORE_PASS" ]; then
             STORE_PASS="DocScannerReleasePass123"
@@ -91,18 +94,18 @@ jobs:
           
           echo "Keystore berhasil disiapkan di: $GITHUB_WORKSPACE/$KEYSTORE_FILE"
 
-      - name: 6. Beri Izin Eksekusi Gradle Wrapper
+      - name: 7. Beri Izin Eksekusi Gradle Wrapper
         run: chmod +x ./gradlew
 
-      - name: 7. Build Release APK
+      - name: 8. Build Release APK
         if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'apk' || github.event_name != 'workflow_dispatch' }}
         run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: 8. Build Release AAB (Android App Bundle untuk Google Play)
+      - name: 9. Build Release AAB (Android App Bundle untuk Google Play)
         if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'aab' || github.event_name != 'workflow_dispatch' }}
         run: ./gradlew :app:bundleRelease --stacktrace
 
-      - name: 9. Upload Release APK Artifact
+      - name: 10. Upload Release APK Artifact
         if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'apk' || github.event_name != 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
@@ -110,7 +113,7 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
 
-      - name: 10. Upload Release AAB Artifact
+      - name: 11. Upload Release AAB Artifact
         if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'aab' || github.event_name != 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
@@ -118,7 +121,7 @@ jobs:
           path: app/build/outputs/bundle/release/*.aab
           retention-days: 30
 
-      - name: 11. Simpan Cadangan Keystore
+      - name: 12. Simpan Cadangan Keystore
         uses: actions/upload-artifact@v4
         with:
           name: Keystore-Signature-Backup
