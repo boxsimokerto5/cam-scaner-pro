@@ -9,34 +9,24 @@ enum class BottomNavItem(
     val icon: ImageVector,
     val testTag: String
 ) {
+    HOME(
+        title = "Beranda",
+        icon = Icons.Default.Home,
+        testTag = "tab_home"
+    ),
     DOCUMENTS(
-        title = "Dokumen",
-        icon = Icons.Default.Description,
-        testTag = "tab_documents"
+        title = "Semua Doku...",
+        icon = Icons.Default.Article,
+        testTag = "tab_all_docs"
     ),
-    CONVERT(
-        title = "Convert",
-        icon = Icons.Default.SwapHoriz,
-        testTag = "tab_convert"
+    TOOLS(
+        title = "Alat",
+        icon = Icons.Default.Widgets,
+        testTag = "tab_tools"
     ),
-    COMPRESS(
-        title = "Kompres",
-        icon = Icons.Default.FolderZip,
-        testTag = "tab_compress"
-    ),
-    READER(
-        title = "Reader",
-        icon = Icons.Default.MenuBook,
-        testTag = "tab_reader"
-    ),
-    EDIT_PDF(
-        title = "Edit PDF",
-        icon = Icons.Default.Tune,
-        testTag = "tab_edit_pdf"
-    ),
-    HISTORY(
-        title = "History",
-        icon = Icons.Default.History,
-        testTag = "tab_history"
+    PROFILE(
+        title = "Saya",
+        icon = Icons.Default.Person,
+        testTag = "tab_profile"
     )
 }

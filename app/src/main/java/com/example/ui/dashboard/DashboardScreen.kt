@@ -2,6 +2,7 @@ package com.example.ui.dashboard
 
 import android.app.Activity
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -9,15 +10,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,10 +26,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.local.DocumentEntity
 import com.example.data.repository.DocumentRepository
 import com.example.scanner.DocumentScannerHelper
@@ -60,11 +55,12 @@ fun DashboardScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Active bottom navigation tab
-    var currentTab by remember { mutableStateOf(BottomNavItem.DOCUMENTS) }
+    var currentTab by remember { mutableStateOf(BottomNavItem.HOME) }
+    var initialToolsSubTab by remember { mutableIntStateOf(0) }
 
-    // Back handler: return to Documents tab if on another tool tab
-    BackHandler(enabled = currentTab != BottomNavItem.DOCUMENTS) {
-        currentTab = BottomNavItem.DOCUMENTS
+    // Back handler: return to HOME tab if on another sub-screen
+    BackHandler(enabled = currentTab != BottomNavItem.HOME) {
+        currentTab = BottomNavItem.HOME
     }
 
     // Active dialog states
@@ -93,8 +89,26 @@ fun DashboardScreen(
         }
     }
 
+    // File Picker for "Impor File"
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.onGalleryImagesReceived(uris)
+        }
+    }
+
     val scannerHelper = remember(activity) {
         activity?.let { DocumentScannerHelper(it) }
+    }
+
+    val launchScanner = {
+        scannerHelper?.startScan(
+            onIntentSenderReady = { request -> scannerLauncher.launch(request) },
+            onError = { err ->
+                Toast.makeText(context, "Kamera pemindai: ${err.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        ) ?: Toast.makeText(context, "Scanner tidak siap", Toast.LENGTH_SHORT).show()
     }
 
     // Display status messages via Snackbar
@@ -117,7 +131,7 @@ fun DashboardScreen(
             }
             context.startActivity(Intent.createChooser(shareIntent, "Bagikan Dokumen"))
         } catch (e: Exception) {
-            // handle error
+            Toast.makeText(context, "Gagal membagikan: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -165,14 +179,14 @@ fun DashboardScreen(
                     Surface(
                         modifier = Modifier.size(80.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = Color(0xFFE6F7F2)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Lock,
                                 contentDescription = null,
                                 modifier = Modifier.size(40.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color(0xFF00A884)
                             )
                         }
                     }
@@ -200,6 +214,7 @@ fun DashboardScreen(
                     Button(
                         onClick = triggerBiometricUnlock,
                         shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A884)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
@@ -215,131 +230,98 @@ fun DashboardScreen(
         return
     }
 
-    val bottomNavScrollState = rememberScrollState()
-
-    // Main App Scaffold with Horizontally Scrollable Bottom Menu
+    // CamScanner Main Scaffold
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.White,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
+            // 4 Items Bottom Navigation matching CamScanner screenshot
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
+                color = Color.White,
                 shadowElevation = 8.dp,
+                border = BorderStroke(0.6.dp, Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(bottomNavScrollState)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BottomNavItem.values().forEach { tab ->
-                            val selected = currentTab == tab
+                    BottomNavItem.values().forEach { tab ->
+                        val isSelected = currentTab == tab
+                        val activeColor = Color(0xFF00A884) // CamScanner Emerald Teal
+                        val inactiveColor = Color(0xFF94A3B8)
 
-                            val animatedBgColor by animateColorAsState(
-                                targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                animationSpec = tween(durationMillis = 200),
-                                label = "nav_bg"
-                            )
-                            val contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { currentTab = tab }
+                                .padding(vertical = 4.dp)
+                                .testTag(tab.testTag)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = tab.title,
+                                    tint = if (isSelected) activeColor else inactiveColor,
+                                    modifier = Modifier.size(24.dp)
+                                )
 
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = animatedBgColor,
-                                border = if (selected) null else BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                                modifier = Modifier
-                                    .heightIn(min = 48.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable { currentTab = tab }
-                                    .testTag(tab.testTag)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.title,
-                                        tint = contentColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = tab.title,
-                                        color = contentColor,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
+                                // Red "EDU" badge on "Saya"
+                                if (tab == BottomNavItem.PROFILE) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFFEF4444),
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 10.dp, y = (-4).dp)
+                                    ) {
+                                        Text(
+                                            text = "EDU",
+                                            color = Color.White,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.5.dp)
+                                        )
+                                    }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = tab.title,
+                                color = if (isSelected) activeColor else inactiveColor,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
             }
         },
         floatingActionButton = {
-            // Only show Scanner FABs on the Documents Home tab
-            if (currentTab == BottomNavItem.DOCUMENTS) {
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+            // Large circular camera FAB matching CamScanner bottom-right button
+            if (currentTab == BottomNavItem.HOME || currentTab == BottomNavItem.DOCUMENTS) {
+                FloatingActionButton(
+                    onClick = launchScanner,
+                    containerColor = Color(0xFF00A884),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .size(60.dp)
+                        .testTag("camscanner_fab_camera")
                 ) {
-                    // Gallery Import Small FAB
-                    SmallFloatingActionButton(
-                        onClick = {
-                            galleryPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(14.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
-                        modifier = Modifier.testTag("gallery_fab")
-                    ) {
-                        Icon(
-                            Icons.Default.AddPhotoAlternate,
-                            contentDescription = "Impor Galeri",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Main Scan Camera Extended FAB
-                    ExtendedFloatingActionButton(
-                        onClick = {
-                            scannerHelper?.startScan(
-                                onIntentSenderReady = { request -> scannerLauncher.launch(request) },
-                                onError = { /* fallback */ }
-                            )
-                        },
-                        icon = {
-                            Icon(
-                                Icons.Default.DocumentScanner,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        },
-                        text = {
-                            Text(
-                                "Pindai Dokumen",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                        modifier = Modifier.testTag("scan_camera_fab")
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Pindai Dokumen",
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             }
@@ -351,314 +333,141 @@ fun DashboardScreen(
                 .padding(innerPadding)
         ) {
             when (currentTab) {
+                BottomNavItem.HOME -> {
+                    // Exact Home Layout from user's screenshot
+                    CamScannerHomeScreen(
+                        documents = uiState.documents,
+                        searchQuery = uiState.searchQuery,
+                        onSearchChange = viewModel::onSearchQueryChanged,
+                        onScanClick = launchScanner,
+                        onPdfToolsClick = {
+                            initialToolsSubTab = 0
+                            currentTab = BottomNavItem.TOOLS
+                        },
+                        onImportImageClick = {
+                            galleryPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        onImportFileClick = {
+                            filePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+                        },
+                        onIdCardClick = {
+                            Toast.makeText(context, "Mode Kartu ID Siap. Membuka kamera...", Toast.LENGTH_SHORT).show()
+                            launchScanner()
+                        },
+                        onSignClick = {
+                            initialToolsSubTab = 2 // Edit PDF / Watermark / Tanda tangan
+                            currentTab = BottomNavItem.TOOLS
+                        },
+                        onQrScanClick = {
+                            Toast.makeText(context, "Membuka scanner kode QR & dokumen...", Toast.LENGTH_SHORT).show()
+                            launchScanner()
+                        },
+                        onAllToolsClick = {
+                            initialToolsSubTab = 0
+                            currentTab = BottomNavItem.TOOLS
+                        },
+                        onViewAllDocumentsClick = {
+                            currentTab = BottomNavItem.DOCUMENTS
+                        },
+                        onDocumentClick = { doc -> previewDocument = doc },
+                        onShareClick = { doc -> sharePdf(doc) },
+                        onOcrClick = { doc -> ocrDocument = doc }
+                    )
+                }
+
                 BottomNavItem.DOCUMENTS -> {
-                    // --- TAB 1: DOKUMEN (HOME) ---
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Header Bar
-                        Surface(
-                            color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding()
+                    // "Semua Doku..." full archive tab
+                    AllDocumentsScreen(
+                        uiState = uiState,
+                        onSearchChanged = viewModel::onSearchQueryChanged,
+                        onCategorySelected = { cat -> viewModel.onCategorySelected(cat ?: "Semua") },
+                        onDocumentClick = { doc -> previewDocument = doc },
+                        onShareClick = { doc -> sharePdf(doc) },
+                        onOcrClick = { doc -> ocrDocument = doc },
+                        onEditClick = { doc -> editDocument = doc },
+                        onDeleteClick = { doc -> viewModel.deleteDocument(doc) },
+                        onScanClick = launchScanner
+                    )
+                }
+
+                BottomNavItem.TOOLS -> {
+                    // "Alat" Complete Toolkit matching CamScanner
+                    ToolsTabScreen(
+                        repository = repository,
+                        toolsManager = toolsManager,
+                        documents = uiState.documents,
+                        onScanClick = launchScanner,
+                        onImportImageClick = {
+                            galleryPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        onImportFileClick = {
+                            filePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+                        },
+                        onLockAppClick = { viewModel.lockApp() },
+                        onDocumentCreated = { /* Room flow updates automatically */ }
+                    )
+                }
+
+                BottomNavItem.PROFILE -> {
+                    // "Saya" Profile & Settings
+                    ProfileScreen(
+                        documents = uiState.documents,
+                        biometricManager = biometricManager,
+                        onLockApp = { viewModel.lockApp() }
+                    )
+                }
+            }
+
+            // Global Loading Indicator
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Image(
-                                            painter = painterResource(id = com.example.R.drawable.app_launcher_icon_1790933447784),
-                                            contentDescription = "Logo",
-                                            modifier = Modifier
-                                                .size(42.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column {
-                                            Text(
-                                                text = "DocScanner",
-                                                style = MaterialTheme.typography.titleLarge,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Surface(
-                                                    shape = CircleShape,
-                                                    color = MaterialTheme.colorScheme.secondary,
-                                                    modifier = Modifier.size(6.dp)
-                                                ) {}
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = "100% Offline • ${uiState.documents.size} Dokumen",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    IconButton(
-                                        onClick = { viewModel.lockApp() },
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .size(40.dp)
-                                            .testTag("lock_app_icon_button")
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Lock,
-                                            contentDescription = "Kunci Aplikasi",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-
-                                // Search Field
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                                ) {
-                                    TextField(
-                                        value = uiState.searchQuery,
-                                        onValueChange = viewModel::onSearchQueryChanged,
-                                        placeholder = {
-                                            Text(
-                                                "Cari judul atau isi teks dokumen (OCR)...",
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Default.Search,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        },
-                                        trailingIcon = {
-                                            if (uiState.searchQuery.isNotEmpty()) {
-                                                IconButton(
-                                                    onClick = { viewModel.onSearchQueryChanged("") },
-                                                    modifier = Modifier.testTag("clear_search_button")
-                                                ) {
-                                                    Icon(Icons.Default.Clear, contentDescription = "Hapus pencarian")
-                                                }
-                                            }
-                                        },
-                                        singleLine = true,
-                                        colors = TextFieldDefaults.colors(
-                                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            focusedIndicatorColor = Color.Transparent,
-                                            unfocusedIndicatorColor = Color.Transparent
-                                        ),
-                                        shape = RoundedCornerShape(16.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("search_text_field")
-                                    )
-                                }
-
-                                // Category Filter Bar
-                                CategoryChipBar(
-                                    selectedCategory = uiState.selectedCategory,
-                                    onCategorySelected = viewModel::onCategorySelected
-                                )
-
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                    thickness = 0.8.dp
-                                )
-                            }
-                        }
-
-                        // Grid / Empty state
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .weight(1f)
-                        ) {
-                            if (uiState.isLoading) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Card(
-                                        shape = RoundedCornerShape(20.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-                                        modifier = Modifier.padding(32.dp)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(28.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            Text(
-                                                text = uiState.loadingMessage.ifBlank { "Memproses dokumen..." },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium,
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                    }
-                                }
-                            } else if (uiState.documents.isEmpty()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier.size(90.dp),
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primaryContainer
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    Icons.Default.DocumentScanner,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(44.dp),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(20.dp))
-                                        Text(
-                                            text = if (uiState.searchQuery.isNotEmpty()) "Tidak ada hasil pencarian" else "Belum Ada Dokumen",
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = if (uiState.searchQuery.isNotEmpty())
-                                                "Coba kata kunci lain untuk judul atau isi teks dokumen."
-                                            else
-                                                "Pindai dokumen fisik dengan kamera atau pilih foto dari galeri Anda.",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.fillMaxWidth(0.85f)
-                                        )
-                                        Spacer(modifier = Modifier.height(24.dp))
-                                        Button(
-                                            onClick = {
-                                                scannerHelper?.startScan(
-                                                    onIntentSenderReady = { request -> scannerLauncher.launch(request) },
-                                                    onError = { }
-                                                )
-                                            },
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Icon(Icons.Default.CameraAlt, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Mulai Pindai Sekarang")
-                                        }
-                                    }
-                                }
-                            } else {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(minSize = 160.dp),
-                                    contentPadding = PaddingValues(16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    items(uiState.documents, key = { it.id }) { doc ->
-                                        DocumentCard(
-                                            document = doc,
-                                            onClick = { previewDocument = doc },
-                                            onShare = { sharePdf(doc) },
-                                            onViewOcr = { ocrDocument = doc },
-                                            onEdit = { editDocument = doc },
-                                            onDelete = { viewModel.deleteDocument(doc) }
-                                        )
-                                    }
-                                }
-                            }
+                            CircularProgressIndicator(color = Color(0xFF00A884))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = uiState.loadingMessage.ifBlank { "Memproses dokumen..." },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
-                }
-
-                BottomNavItem.CONVERT -> {
-                    // --- TAB 2: CONVERT ---
-                    ConvertScreen(
-                        repository = repository,
-                        toolsManager = toolsManager,
-                        documents = uiState.documents,
-                        onDocumentCreated = { currentTab = BottomNavItem.DOCUMENTS }
-                    )
-                }
-
-                BottomNavItem.COMPRESS -> {
-                    // --- TAB 3: KOMPRES ---
-                    CompressScreen(
-                        repository = repository,
-                        toolsManager = toolsManager,
-                        documents = uiState.documents,
-                        onDocumentCreated = { currentTab = BottomNavItem.DOCUMENTS }
-                    )
-                }
-
-                BottomNavItem.READER -> {
-                    // --- TAB 4: READER ---
-                    ReaderScreen(
-                        repository = repository,
-                        toolsManager = toolsManager,
-                        documents = uiState.documents
-                    )
-                }
-
-                BottomNavItem.EDIT_PDF -> {
-                    // --- TAB 5: EDIT PDF ---
-                    EditPdfScreen(
-                        repository = repository,
-                        toolsManager = toolsManager,
-                        documents = uiState.documents,
-                        onDocumentCreated = { currentTab = BottomNavItem.DOCUMENTS }
-                    )
-                }
-
-                BottomNavItem.HISTORY -> {
-                    // --- TAB 6: HISTORY (RIWAYAT TINDAKAN) ---
-                    HistoryScreen(
-                        repository = repository
-                    )
                 }
             }
         }
     }
 
-    // Modal: PDF Preview Dialog
+    // Dialogs
     previewDocument?.let { doc ->
         PdfPreviewDialog(
             document = doc,
             onDismiss = { previewDocument = null },
             onShare = { sharePdf(doc) },
             onViewOcr = {
-                val temp = doc
                 previewDocument = null
-                ocrDocument = temp
+                ocrDocument = doc
             }
         )
     }
 
-    // Modal: OCR Text Dialog
     ocrDocument?.let { doc ->
         OcrTextDialog(
             document = doc,
@@ -666,7 +475,6 @@ fun DashboardScreen(
         )
     }
 
-    // Modal: Edit Document Dialog
     editDocument?.let { doc ->
         EditDocumentDialog(
             document = doc,
@@ -678,24 +486,24 @@ fun DashboardScreen(
         )
     }
 
-    // Modal: Save Scanned Document Dialog
-    uiState.pendingScanResult?.let { scanResult ->
+    // Save Scan Dialog for Camera Scans
+    uiState.pendingScanResult?.let { scan ->
         SaveScanDialog(
-            pageCount = scanResult.pages?.size ?: 1,
+            pageCount = scan.pages?.size ?: 1,
             isFromGallery = false,
-            onDismiss = viewModel::dismissPendingDialogs,
+            onDismiss = { viewModel.dismissPendingDialogs() },
             onConfirm = { title, category ->
                 viewModel.confirmSaveScan(title, category)
             }
         )
     }
 
-    // Modal: Save Gallery Imported Document Dialog
+    // Save Scan Dialog for Gallery Imports
     uiState.pendingGalleryUris?.let { uris ->
         SaveScanDialog(
             pageCount = uris.size,
             isFromGallery = true,
-            onDismiss = viewModel::dismissPendingDialogs,
+            onDismiss = { viewModel.dismissPendingDialogs() },
             onConfirm = { title, category ->
                 viewModel.confirmSaveGallery(title, category)
             }
