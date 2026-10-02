@@ -1,0 +1,126 @@
+name: Build Android APK & AAB
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Tipe Build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - apk
+          - aab
+
+jobs:
+  build:
+    name: Build & Sign APK and AAB
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: 3. Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 4. Siapkan File Konfigurasi Lingkungan (.env)
+        run: |
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+              echo ".env disiapkan dari .env.example"
+            else
+              touch .env
+              echo ".env kosong dibuat"
+            fi
+          fi
+
+      - name: 5. Buat / Siapkan Keystore Signature Otomatis
+        id: setup_keystore
+        run: |
+          # Direktori dan nama file keystore
+          KEYSTORE_FILE="my-upload-key.jks"
+          KEY_ALIAS="upload"
+          
+          # Tentukan password (menggunakan secret jika ada, atau default aman)
+          STORE_PASS="${{ secrets.STORE_PASSWORD }}"
+          if [ -z "$STORE_PASS" ]; then
+            STORE_PASS="DocScannerReleasePass123"
+          fi
+          
+          KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          if [ -z "$KEY_PASS" ]; then
+            KEY_PASS="DocScannerReleasePass123"
+          fi
+          
+          # Cek jika keystore base64 dioper lewat GitHub Secrets
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Menggunakan Keystore yang ada dari GitHub Secrets..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$KEYSTORE_FILE"
+          else
+            echo "Membuat Signature Keystore baru secara otomatis menggunakan keytool..."
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_FILE" \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "$STORE_PASS" \
+              -keypass "$KEY_PASS" \
+              -dname "CN=DocScanner, OU=Android Development, O=AI Studio, L=Jakarta, ST=DKI Jakarta, C=ID"
+          fi
+          
+          # Simpan ke environment variable untuk langkah Gradle selanjutnya
+          echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/$KEYSTORE_FILE" >> $GITHUB_ENV
+          echo "STORE_PASSWORD=$STORE_PASS" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=$KEY_PASS" >> $GITHUB_ENV
+          echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+          
+          echo "Keystore berhasil disiapkan di: $GITHUB_WORKSPACE/$KEYSTORE_FILE"
+
+      - name: 6. Beri Izin Eksekusi Gradle Wrapper
+        run: chmod +x ./gradlew
+
+      - name: 7. Build Release APK
+        if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'apk' || github.event_name != 'workflow_dispatch' }}
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: 8. Build Release AAB (Android App Bundle untuk Google Play)
+        if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'aab' || github.event_name != 'workflow_dispatch' }}
+        run: ./gradlew :app:bundleRelease --stacktrace
+
+      - name: 9. Upload Release APK Artifact
+        if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'apk' || github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocScanner-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      - name: 10. Upload Release AAB Artifact
+        if: ${{ github.event.inputs.build_type == 'all' || github.event.inputs.build_type == 'aab' || github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocScanner-Release-AAB
+          path: app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+
+      - name: 11. Simpan Cadangan Keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: Keystore-Signature-Backup
+          path: my-upload-key.jks
+          retention-days: 60

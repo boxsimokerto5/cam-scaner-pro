@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">DocScanner Offline</string>
+    <string name="search_placeholder">Cari judul atau isi dokumen (OCR)...</string>
+    <string name="empty_documents_title">Belum Ada Dokumen</string>
+    <string name="empty_documents_subtitle">Pindai dokumen fisik atau impor gambar dari galeri untuk memulai.</string>
+    <string name="scan_camera">Pindai Dokumen</string>
+    <string name="import_gallery">Impor Gambar Galeri</string>
+    <string name="category_all">Semua</string>
+    <string name="category_general">Umum</string>
+    <string name="category_receipt">Kuitansi / Nota</string>
+    <string name="category_id_card">KTP / Kartu ID</string>
+    <string name="category_contract">Kontrak / Dokumen</string>
+    <string name="category_notes">Catatan</string>
+    <string name="biometric_title">Buka Kunci Dokumen</string>
+    <string name="biometric_subtitle">Gunakan sidik jari atau PIN untuk membuka aplikasi</string>
+    <string name="biometric_negative">Batal</string>
+    <string name="security_locked_title">Aplikasi Terkunci</string>
+    <string name="security_unlock_button">Buka Kunci</string>
+    <string name="btn_share">Bagikan PDF</string>
+    <string name="btn_delete">Hapus</string>
+    <string name="btn_close">Tutup</string>
+    <string name="pdf_preview_title">Pratinjau Dokumen</string>
+    <string name="ocr_extracted_title">Teks Terdeteksi (OCR)</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "DocScanner Offline",
+  "description": "Offline Document Scanner and Manager with on-device OCR, native PDF viewer, secure local storage, and biometric lock.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
